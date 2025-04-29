@@ -22,6 +22,7 @@ class OwnerHomeScreen extends StatefulWidget {
 class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
   final DatabaseService _databaseService = DatabaseService();
   int _currentTabIndex = 0;
+  bool _isRefreshing = false;
 
   @override
   Widget build(BuildContext context) {
@@ -40,12 +41,12 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
             label: 'My Properties',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.article_outlined),
-            label: 'Requests',
+            icon: Icon(Icons.search),
+            label: 'Explore',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.message_outlined),
-            label: 'Messages',
+            icon: Icon(Icons.article_outlined),
+            label: 'Applications',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.person_outline),
@@ -53,18 +54,23 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
           ),
         ],
       ),
-      // Button to add a new property
+      // Add Property floating action button
       floatingActionButton: _currentTabIndex == 0
           ? FloatingActionButton(
         onPressed: () async {
           final result = await Navigator.pushNamed(context, AddPropertyScreen.routeName);
           if (result == true) {
-            // Refresh the properties list if a new property was added
-            setState(() {});
+            setState(() {
+              _isRefreshing = true;
+            });
+            await Future.delayed(const Duration(milliseconds: 300));
+            setState(() {
+              _isRefreshing = false;
+            });
           }
         },
-        backgroundColor: AppTheme.primaryColor,
         child: const Icon(Icons.add),
+        backgroundColor: Theme.of(context).primaryColor,
       )
           : null,
     );
@@ -75,9 +81,9 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
       case 0:
         return _buildPropertiesTab();
       case 1:
-        return _buildApplicationsTab();
+        return _buildExploreTab();
       case 2:
-        return _buildMessagesTab();
+        return _buildApplicationsTab();
       case 3:
         return _buildProfileTab();
       default:
@@ -87,7 +93,9 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
 
   Widget _buildPropertiesTab() {
     return SafeArea(
-      child: FutureBuilder<List<Property>>(
+      child: _isRefreshing
+          ? const Center(child: CircularProgressIndicator())
+          : FutureBuilder<List<Property>>(
         future: _loadOwnerProperties(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -127,9 +135,11 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
                     const SizedBox(height: 32),
                     CustomButton(
                       text: 'Add a property',
-                      onPressed: () {
-                        Navigator.pushNamed(context, AddPropertyScreen.routeName)
-                            .then((_) => setState(() {})); // Refresh on return
+                      onPressed: () async {
+                        final result = await Navigator.pushNamed(context, AddPropertyScreen.routeName);
+                        if (result == true) {
+                          setState(() {});
+                        }
                       },
                       icon: Icons.add,
                     ),
@@ -139,29 +149,34 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
             );
           } else {
             final properties = snapshot.data!;
-            return CustomScrollView(
-              slivers: [
-                // Header
-                SliverAppBar(
-                  title: const Text('My Properties'),
-                  centerTitle: true,
-                  floating: true,
-                  snap: true,
-                ),
-                // Properties list
-                SliverPadding(
-                  padding: const EdgeInsets.all(16),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                          (context, index) {
-                        final property = properties[index];
-                        return _buildPropertyCard(property);
-                      },
-                      childCount: properties.length,
+            return RefreshIndicator(
+              onRefresh: () async {
+                setState(() {});
+              },
+              child: CustomScrollView(
+                slivers: [
+                  // AppBar
+                  SliverAppBar(
+                    title: const Text('My Properties'),
+                    centerTitle: true,
+                    floating: true,
+                    snap: true,
+                  ),
+                  // Property list
+                  SliverPadding(
+                    padding: const EdgeInsets.all(16),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                          final property = properties[index];
+                          return _buildPropertyCard(property);
+                        },
+                        childCount: properties.length,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             );
           }
         },
@@ -177,12 +192,15 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
       ),
       elevation: 2,
       child: InkWell(
-        onTap: () {
-          Navigator.pushNamed(
+        onTap: () async {
+          final result = await Navigator.pushNamed(
             context,
             PropertyDetailsScreen.routeName,
             arguments: property,
-          ).then((_) => setState(() {})); // Refresh on return
+          );
+          if (result == true) {
+            setState(() {});
+          }
         },
         borderRadius: BorderRadius.circular(12),
         child: Column(
@@ -302,7 +320,7 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  // Actions
+                  // Action buttons
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
@@ -310,10 +328,9 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
                         icon: Icons.edit,
                         label: 'Edit',
                         onTap: () {
-                          // Navigate to edit screen
-                          // Will implement in a future update
+                          // TODO: Navigate to edit screen
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Edit functionality coming soon')),
+                            const SnackBar(content: Text('Edit feature coming soon')),
                           );
                         },
                       ),
@@ -323,7 +340,7 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
                             : Icons.visibility,
                         label: property.isAvailable
                             ? 'Hide'
-                            : 'Publish',
+                            : 'Show',
                         onTap: () {
                           _togglePropertyAvailability(property);
                         },
@@ -389,7 +406,7 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Delete this property?'),
         content: const Text(
-            'This action cannot be undone. All associated applications will also be deleted.'),
+            'This action cannot be undone. All applications associated with this property will also be deleted.'),
         actions: [
           TextButton(
             onPressed: () {
@@ -451,8 +468,8 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
         SnackBar(
           content: Text(
             updatedProperty.isAvailable
-                ? 'Your property is now visible'
-                : 'Your property is now hidden',
+                ? 'Property is now visible to students'
+                : 'Property is now hidden',
           ),
           backgroundColor: Colors.green,
         ),
@@ -465,6 +482,139 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
         ),
       );
     }
+  }
+
+  Widget _buildExploreTab() {
+    // Show all properties for browsing - similar to student view
+    return FutureBuilder<List<Property>>(
+      future: _databaseService.searchProperties(availableOnly: true),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        } else if (snapshot.hasError) {
+          return Center(
+            child: Text('Error: ${snapshot.error}'),
+          );
+        } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const Center(
+            child: Text('No properties available at the moment'),
+          );
+        } else {
+          final properties = snapshot.data!;
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: properties.length + 1, // +1 for the header
+            itemBuilder: (context, index) {
+              if (index == 0) {
+                // Header
+                return const Padding(
+                  padding: EdgeInsets.only(bottom: 16),
+                  child: Text(
+                    'Explore Available Properties',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                );
+              }
+
+              final property = properties[index - 1];
+              return Card(
+                margin: const EdgeInsets.only(bottom: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: InkWell(
+                  onTap: () {
+                    Navigator.pushNamed(
+                      context,
+                      PropertyDetailsScreen.routeName,
+                      arguments: property,
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Image
+                      ClipRRect(
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                        child: AspectRatio(
+                          aspectRatio: 16 / 9,
+                          child: property.imageUrls.isNotEmpty
+                              ? Image.network(
+                            property.imageUrls[0],
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                color: Colors.grey[300],
+                                child: const Center(
+                                  child: Icon(Icons.image_not_supported, size: 50),
+                                ),
+                              );
+                            },
+                          )
+                              : Container(
+                            color: Colors.grey[300],
+                            child: const Center(
+                              child: Icon(Icons.home, size: 50),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              property.title,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              property.address,
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Icon(Icons.euro, size: 16, color: Colors.grey[600]),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${property.price.toInt()} / month',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                Icon(Icons.bed, size: 16, color: Colors.grey[600]),
+                                const SizedBox(width: 4),
+                                Text('${property.bedrooms}'),
+                                const SizedBox(width: 16),
+                                Icon(Icons.bathtub, size: 16, color: Colors.grey[600]),
+                                const SizedBox(width: 4),
+                                Text('${property.bathrooms}'),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        }
+      },
+    );
   }
 
   Widget _buildApplicationsTab() {
@@ -507,49 +657,18 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
             ),
           );
         } else {
-          // Display rental applications
-          return Center(
-            child: Text('${snapshot.data!.length} applications received'),
+          // Show applications list - this is a placeholder
+          // You would implement full applications functionality here
+          return const Center(
+            child: Text('Applications list to be implemented'),
           );
         }
       },
     );
   }
 
-  Widget _buildMessagesTab() {
-    // Message tab implementation
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.message_outlined,
-            size: 80,
-            color: Colors.grey[400],
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'No messages yet',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Your messages will appear here',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.grey,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildProfileTab() {
-    // Owner profile tab
+    // Owner profile display
     return FutureBuilder<String?>(
       future: _getUserId(),
       builder: (context, snapshot) {
@@ -669,27 +788,29 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
                               ? Colors.blue
                               : Colors.amber,
                         ),
-                        title: const Text('Verification status'),
+                        title: const Text('Verification Status'),
                         subtitle: Text(
                           owner.isVerifiedOwner
-                              ? 'Verified owner'
-                              : 'Verification pending',
+                              ? 'Verified Owner'
+                              : 'Verification Pending',
                         ),
                         trailing: owner.isVerifiedOwner
                             ? null
                             : TextButton(
                           onPressed: () {
                             // Navigate to verification screen
-                            Navigator.pushNamed(
-                              context,
-                              '/owner/profile-setup',
-                            ).then((_) => setState(() {}));
+                            // For now, show a message
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Verification feature coming soon'),
+                              ),
+                            );
                           },
                           child: const Text('Complete'),
                         ),
                       ),
 
-                      // Property count
+                      // Number of properties
                       FutureBuilder<List<Property>>(
                         future: _loadOwnerProperties(),
                         builder: (context, snapshot) {
@@ -699,7 +820,7 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
                           return ListTile(
                             leading: const Icon(Icons.home_work),
                             title: const Text('Properties'),
-                            subtitle: Text('$propertyCount property${propertyCount > 1 || propertyCount == 0 ? 'ies' : 'y'}'),
+                            subtitle: Text('$propertyCount property${propertyCount > 1 ? 'ies' : ''}'),
                           );
                         },
                       ),
@@ -715,9 +836,9 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
                       const Divider(),
                       const SizedBox(height: 16),
 
-                      // Logout button
+                      // Sign out button
                       CustomButton(
-                        text: 'Log out',
+                        text: 'Sign Out',
                         onPressed: () async {
                           await Provider.of<AuthService>(
                             context,

@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -27,6 +28,38 @@ class DatabaseService {
         _applicationsCollection = FirebaseFirestore.instance.collection(
             'applications'),
         _reviewsCollection = FirebaseFirestore.instance.collection('reviews');
+
+  // *** IMAGE UPLOAD METHODS ***
+
+  /// Simulated method to upload a student image
+  /// In a real app, this would use Firebase Storage
+  Future<String> uploadStudentImage(String studentId, File imageFile) async {
+    // For demo purposes, we'll return a placeholder URL
+    await Future.delayed(Duration(milliseconds: 1500));  // Simulate upload time
+    return 'https://randomuser.me/api/portraits/men/${Random().nextInt(90)}.jpg';
+  }
+
+  /// Simulated method to upload an owner image
+  /// In a real app, this would use Firebase Storage
+  Future<String> uploadOwnerImage(String ownerId, File imageFile, String type) async {
+    // For demo purposes, we'll return a placeholder URL
+    await Future.delayed(Duration(milliseconds: 1500));  // Simulate upload time
+    if (type == 'profile') {
+      return 'https://randomuser.me/api/portraits/men/${Random().nextInt(90)}.jpg';
+    } else {
+      // ID document - in a real app would be stored securely
+      return 'https://example.com/id_verification/${ownerId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+    }
+  }
+
+  /// Simulated method to upload a property image
+  /// In a real app, this would use Firebase Storage
+  Future<String> uploadPropertyImage(String propertyId, File imageFile) async {
+    // For demo purposes, we'll return a placeholder URL
+    await Future.delayed(Duration(milliseconds: 1500));  // Simulate upload time
+    int randomNum = Random().nextInt(1000);
+    return 'https://picsum.photos/seed/${propertyId}_$randomNum/800/600';
+  }
 
   // *** USER METHODS ***
 

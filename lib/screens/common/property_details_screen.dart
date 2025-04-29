@@ -60,6 +60,7 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
     }
   }
 
+// Dans la méthode _toggleFavorite de PropertyDetailsScreen
   void _toggleFavorite() async {
     setState(() {
       _isFavorite = !_isFavorite;
@@ -81,6 +82,15 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
             widget.property.propertyId,
           );
         }
+        // Afficher un message de succès
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_isFavorite
+                ? 'Ajouté aux favoris'
+                : 'Retiré des favoris'),
+            duration: const Duration(seconds: 1),
+          ),
+        );
       }
     } catch (e) {
       print('Error toggling favorite: $e');
@@ -88,6 +98,12 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
       setState(() {
         _isFavorite = !_isFavorite;
       });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erreur: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -459,7 +475,7 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${widget.property.price} €',
+                  '${widget.property.price} DT',
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,

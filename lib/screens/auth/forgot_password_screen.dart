@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/common/custom_button.dart';
+import '../../config/themes.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   static const String routeName = '/forgot-password';
@@ -41,8 +42,20 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           _isLoading = false;
         });
       } catch (e) {
+        String errorMsg = 'Error while sending the reset email';
+
+        // Parse Firebase error messages to be more user-friendly
+        final errorStr = e.toString().toLowerCase();
+        if (errorStr.contains('user-not-found')) {
+          errorMsg = 'No account found with this email';
+        } else if (errorStr.contains('invalid-email')) {
+          errorMsg = 'Please enter a valid email address';
+        } else if (errorStr.contains('network')) {
+          errorMsg = 'Network error. Please check your internet connection';
+        }
+
         setState(() {
-          _errorMessage = 'Error while sending the email: ${e.toString()}';
+          _errorMessage = errorMsg;
           _isLoading = false;
         });
       }
@@ -108,19 +121,27 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           if (_errorMessage != null)
             Padding(
               padding: const EdgeInsets.only(bottom: 16),
-              child: Text(
-                _errorMessage!,
-                style: const TextStyle(
-                  color: Colors.red,
-                  fontSize: 14,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red.shade200),
                 ),
-                textAlign: TextAlign.center,
+                child: Text(
+                  _errorMessage!,
+                  style: TextStyle(
+                    color: Colors.red.shade800,
+                    fontSize: 14,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
               ),
             ),
           _isLoading
               ? const Center(child: CircularProgressIndicator())
               : CustomButton(
-            text: 'Send the link',
+            text: 'Send reset link',
             onPressed: _resetPassword,
           ),
         ],
@@ -132,10 +153,18 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        const Icon(
-          Icons.mark_email_read,
-          size: 80,
-          color: Colors.green,
+        Container(
+          width: 80,
+          height: 80,
+          decoration: BoxDecoration(
+            color: AppTheme.primaryColor.withOpacity(0.1),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            Icons.mark_email_read,
+            size: 40,
+            color: AppTheme.primaryColor,
+          ),
         ),
         const SizedBox(height: 24),
         const Text(
@@ -148,7 +177,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         ),
         const SizedBox(height: 16),
         Text(
-          'An email has been sent to ${_emailController.text}.\nPlease follow the instructions to reset your password',
+          'An email has been sent to:\n${_emailController.text}\nPlease follow the instructions to reset your password',
           style: const TextStyle(fontSize: 16),
           textAlign: TextAlign.center,
         ),

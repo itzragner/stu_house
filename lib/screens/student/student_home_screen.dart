@@ -9,6 +9,7 @@ import '../../widgets/common/custom_search_bar.dart';
 import '../../widgets/common/category_filter.dart';
 import 'search_screen.dart';
 import 'map_screen.dart';
+import 'favorites_screen.dart';
 import '../common/property_details_screen.dart';
 import '../../models/student.dart';
 
@@ -153,7 +154,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
       case 0:
         return _buildExploreTab();
       case 1:
-        return _buildFavoritesTab();
+        return const FavoritesScreen();
       case 2:
         return _buildApplicationsTab();
       case 3:
@@ -217,139 +218,82 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
                 ? const Center(
               child: Text('Aucun logement disponible pour le moment.'),
             )
-                : ListView.builder(
-              padding: const EdgeInsets.only(top: 8),
-              itemCount: _properties.length,
-              itemBuilder: (context, index) {
-                final property = _properties[index];
-                return PropertyCard(
-                  property: property,
-                  onTap: () {
-                    Navigator.pushNamed(
-                      context,
-                      PropertyDetailsScreen.routeName,
-                      arguments: property,
-                    );
-                  },
-                  onFavoriteToggle: (isFavorite) async {
-                    final authService = Provider.of<AuthService>(
-                      context,
-                      listen: false,
-                    );
-                    final userId = authService.userId;
+                : RefreshIndicator(
+              onRefresh: _loadProperties,
+              child: ListView.builder(
+                padding: const EdgeInsets.only(top: 8),
+                itemCount: _properties.length,
+                itemBuilder: (context, index) {
+                  final property = _properties[index];
+                  return PropertyCard(
+                    property: property,
+                    onTap: () {
+                      Navigator.pushNamed(
+                        context,
+                        PropertyDetailsScreen.routeName,
+                        arguments: property,
+                      ).then((_) {
+                        // Refresh when returning from details
+                        _loadProperties();
+                      });
+                    },
+                    onFavoriteToggle: (isFavorite) async {
+                      final authService = Provider.of<AuthService>(
+                        context,
+                        listen: false,
+                      );
+                      final userId = authService.userId;
 
-                    if (userId != null) {
-                      if (isFavorite) {
-                        await _databaseService.addFavoriteProperty(
-                          userId,
-                          property.propertyId,
-                        );
+                      if (userId != null) {
+                        try {
+                          if (isFavorite) {
+                            await _databaseService.addFavoriteProperty(
+                              userId,
+                              property.propertyId,
+                            );
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Ajouté aux favoris'),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                          } else {
+                            await _databaseService.removeFavoriteProperty(
+                              userId,
+                              property.propertyId,
+                            );
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Retiré des favoris'),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Erreur: ${e.toString()}'),
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
+                        }
                       } else {
-                        await _databaseService.removeFavoriteProperty(
-                          userId,
-                          property.propertyId,
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Connectez-vous pour ajouter des favoris'),
+                            duration: Duration(seconds: 2),
+                          ),
                         );
                       }
-                    }
-                  },
-                );
-              },
+                    },
+                  );
+                },
+              ),
             ),
           ),
         ],
       ),
     );
-  }
-
-  Widget _buildFavoritesTab() {
-    return FutureBuilder<List<Property>>(
-      future: _loadFavoriteProperties(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        } else if (snapshot.hasError) {
-          return Center(
-            child: Text('Erreur: ${snapshot.error}'),
-          );
-        } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.favorite_border,
-                  size: 80,
-                  color: Colors.grey[400],
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Aucun favori pour le moment',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Ajoutez des logements à vos favoris\npour les retrouver ici',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.grey,
-                  ),
-                ),
-              ],
-            ),
-          );
-        } else {
-          final favorites = snapshot.data!;
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: favorites.length,
-            itemBuilder: (context, index) {
-              final property = favorites[index];
-              return PropertyCard(
-                property: property,
-                onTap: () {
-                  Navigator.pushNamed(
-                    context,
-                    PropertyDetailsScreen.routeName,
-                    arguments: property,
-                  );
-                },
-                onFavoriteToggle: (isFavorite) async {
-                  final authService = Provider.of<AuthService>(
-                    context,
-                    listen: false,
-                  );
-                  final userId = authService.userId;
-
-                  if (userId != null && !isFavorite) {
-                    await _databaseService.removeFavoriteProperty(
-                      userId,
-                      property.propertyId,
-                    );
-                    // Actualiser la liste après suppression
-                    setState(() {});
-                  }
-                },
-                isFavorite: true,
-              );
-            },
-          );
-        }
-      },
-    );
-  }
-
-  Future<List<Property>> _loadFavoriteProperties() async {
-    final authService = Provider.of<AuthService>(context, listen: false);
-    final userId = authService.userId;
-
-    if (userId == null) {
-      return [];
-    }
-
-    return await _databaseService.getFavoriteProperties(userId);
   }
 
   Widget _buildApplicationsTab() {
@@ -367,7 +311,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
   }
 
   Widget _buildProfileTab() {
-    // À implémenter : affichage du profil étudiant
+    // Affichage du profil étudiant
     return FutureBuilder<String?>(
       future: _getUserId(),
       builder: (context, snapshot) {
