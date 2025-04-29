@@ -4,6 +4,7 @@ import '../../services/auth_service.dart';
 import '../auth/login_screen.dart';
 import '../student/student_home_screen.dart';
 import '../owner/owner_home_screen.dart';
+import '../../config/themes.dart';
 
 class SplashScreen extends StatefulWidget {
   static const String routeName = '/splash';
@@ -44,8 +45,8 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
     _animationController.forward();
 
-    // Vérifier l'état de l'authentification après le chargement des animations
-    Future.delayed(const Duration(seconds: 3), () {
+    // Check authentication status after animations
+    Future.delayed(const Duration(seconds: 2), () {
       _checkAuthAndNavigate();
     });
   }
@@ -56,27 +57,45 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     super.dispose();
   }
 
-  // Vérifier l'état d'authentification et naviguer en conséquence
+  // Check authentication status and navigate accordingly
   Future<void> _checkAuthAndNavigate() async {
     final authService = Provider.of<AuthService>(context, listen: false);
 
+    // Wait for auth status to be determined (not loading)
+    if (authService.status == AuthStatus.loading) {
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (mounted) _checkAuthAndNavigate();
+      return;
+    }
+
     if (authService.isAuthenticated) {
-      // L'utilisateur est déjà connecté, naviguer vers la page d'accueil appropriée
-      if (authService.isStudent) {
-        Navigator.of(context).pushReplacementNamed(StudentHomeScreen.routeName);
+      // User is already logged in, navigate to appropriate home screen
+      if (authService.isStudent || authService.userType == 'guest') {
+        if (mounted) {
+          Navigator.of(context).pushReplacementNamed(StudentHomeScreen.routeName);
+        }
       } else if (authService.isOwner) {
-        Navigator.of(context).pushReplacementNamed(StudentHomeScreen.routeName);
+        if (mounted) {
+          Navigator.of(context).pushReplacementNamed(OwnerHomeScreen.routeName);
+        }
+      } else {
+        // Default to student home if type is unknown
+        if (mounted) {
+          Navigator.of(context).pushReplacementNamed(StudentHomeScreen.routeName);
+        }
       }
     } else {
-      // L'utilisateur n'est pas connecté, naviguer vers la page de connexion
-      Navigator.of(context).pushReplacementNamed(StudentHomeScreen.routeName);
+      // User is not logged in, navigate to login screen
+      if (mounted) {
+        Navigator.of(context).pushReplacementNamed(LoginScreen.routeName);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.primary,
+      backgroundColor: AppTheme.primaryColor,
       body: Center(
         child: AnimatedBuilder(
           animation: _animationController,
@@ -88,14 +107,14 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Logo de l'application
+                    // App logo
                     Icon(
                       Icons.home_work,
                       size: 100,
                       color: Colors.white,
                     ),
                     const SizedBox(height: 24),
-                    // Nom de l'application
+                    // App name
                     Text(
                       'StuHous',
                       style: TextStyle(
@@ -115,7 +134,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 64),
-                    // Indicateur de chargement
+                    // Loading indicator
                     SizedBox(
                       width: 40,
                       height: 40,

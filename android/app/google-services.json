@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "464876798302",
+    "project_id": "stuhous-236f6",
+    "storage_bucket": "stuhous-236f6.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:464876798302:android:32ef813bec820293dacfcf",
+        "android_client_info": {
+          "package_name": "com.example.stu_hous"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBQXbhZo__WV4PK8ulqGCIK0fFFBy-WHeY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:464876798302:android:37270eda6e65606edacfcf",
+        "android_client_info": {
+          "package_name": "com.example.stu_house"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBQXbhZo__WV4PK8ulqGCIK0fFFBy-WHeY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

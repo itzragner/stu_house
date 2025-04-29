@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import '../../models/property.dart';
 import '../../config/themes.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import '../../services/auth_service.dart';
+import '../../services/database_service.dart';
 
 class PropertyCard extends StatefulWidget {
   final Property property;
@@ -23,16 +26,84 @@ class PropertyCard extends StatefulWidget {
 
 class _PropertyCardState extends State<PropertyCard> {
   late bool _isFavorite;
+  bool _isCheckingFavorite = true;
   final currencyFormat = NumberFormat.currency(
     locale: 'fr_FR',
-    symbol: '€',
+    symbol: 'DT',
     decimalDigits: 0,
   );
+  final DatabaseService _databaseService = DatabaseService();
 
   @override
   void initState() {
     super.initState();
     _isFavorite = widget.isFavorite;
+    _checkIfFavorite();
+  }
+
+  Future<void> _checkIfFavorite() async {
+    // Only check if not already set as favorite from parent
+    if (!widget.isFavorite) {
+      setState(() {
+        _isCheckingFavorite = true;
+      });
+
+      try {
+        final authService = Provider.of<AuthService>(context, listen: false);
+        final userId = authService.userId;
+
+        if (userId != null) {
+          final student = await _databaseService.getStudent(userId);
+          setState(() {
+            _isFavorite = student.favoritePropertyIds.contains(widget.property.propertyId);
+            _isCheckingFavorite = false;
+          });
+        } else {
+          setState(() {
+            _isCheckingFavorite = false;
+          });
+        }
+      } catch (e) {
+        print('Error checking favorite status: $e');
+        setState(() {
+          _isCheckingFavorite = false;
+        });
+      }
+    } else {
+      setState(() {
+        _isCheckingFavorite = false;
+      });
+    }
+  }
+
+  void _toggleFavorite() async {
+    // Toggle state immediately for better UX
+    setState(() {
+      _isFavorite = !_isFavorite;
+    });
+
+    // Notify parent
+    widget.onFavoriteToggle(_isFavorite);
+
+    // Update database directly for redundancy
+    try {
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final userId = authService.userId;
+
+      if (userId != null) {
+        if (_isFavorite) {
+          await _databaseService.addFavoriteProperty(userId, widget.property.propertyId);
+        } else {
+          await _databaseService.removeFavoriteProperty(userId, widget.property.propertyId);
+        }
+      }
+    } catch (e) {
+      print('Error toggling favorite: $e');
+      // Revert UI state if database operation failed
+      setState(() {
+        _isFavorite = !_isFavorite;
+      });
+    }
   }
 
   @override
@@ -85,12 +156,7 @@ class _PropertyCardState extends State<PropertyCard> {
                   top: 12,
                   right: 12,
                   child: GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _isFavorite = !_isFavorite;
-                      });
-                      widget.onFavoriteToggle(_isFavorite);
-                    },
+                    onTap: _isCheckingFavorite ? null : _toggleFavorite,
                     child: Container(
                       width: 40,
                       height: 40,
@@ -105,7 +171,16 @@ class _PropertyCardState extends State<PropertyCard> {
                           ),
                         ],
                       ),
-                      child: Icon(
+                      child: _isCheckingFavorite
+                          ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
+                        ),
+                      )
+                          : Icon(
                         _isFavorite ? Icons.favorite : Icons.favorite_border,
                         color: _isFavorite ? AppTheme.primaryColor : Colors.grey,
                         size: 24,
