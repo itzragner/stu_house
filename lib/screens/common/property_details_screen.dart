@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:stu_house/screens/common/reviews_screen.dart';
 import '../../models/property.dart';
 import '../../services/database_service.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/common/custom_button.dart';
 import '../../config/themes.dart';
+import '../student/add_review_screen.dart';
 
 class PropertyDetailsScreen extends StatefulWidget {
   static const String routeName = '/property/details';
@@ -24,11 +26,23 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
   bool _isLoading = true;
   int _currentImageIndex = 0;
   final PageController _pageController = PageController();
+  double? _localRating;
 
   @override
   void initState() {
     super.initState();
     _checkIfFavorite();
+    _loadLocalRating();
+  }
+  Future<void> _loadLocalRating() async {
+    if (widget.property.rating == null) {
+      final rating = await _getLocalRating();
+      if (mounted) {
+        setState(() {
+          _localRating = rating;
+        });
+      }
+    }
   }
 
   Future<void> _checkIfFavorite() async {
@@ -60,7 +74,6 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
     }
   }
 
-// Dans la méthode _toggleFavorite de PropertyDetailsScreen
   void _toggleFavorite() async {
     setState(() {
       _isFavorite = !_isFavorite;
@@ -106,6 +119,43 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
       );
     }
   }
+
+  void _navigateToReviews() {
+    Navigator.pushNamed(
+      context,
+      ReviewsScreen.routeName,
+      arguments: widget.property,
+    );
+  }
+
+  void _addReview() {
+    final authService = Provider.of<AuthService>(context, listen: false);
+
+    // Check if the user is a student
+    if (authService.isStudent) {
+      Navigator.pushNamed(
+        context,
+        AddReviewScreen.routeName,
+        arguments: widget.property,
+      ).then((value) {
+        if (value == true) {
+          // Refresh the screen if a review was added
+          setState(() {
+            // This will rebuild the UI with updated data
+          });
+        }
+      });
+    } else {
+      // Show a message if the user is not a student
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Only students can review properties'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -256,19 +306,31 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                           ),
                         ),
                       ),
-                      Row(
-                        children: [
-                          const Icon(Icons.star, size: 20),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${widget.property.rating ?? 4.5}',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
+                      GestureDetector(
+                        onTap: _navigateToReviews,
+                        child: Row(
+                          children: [
+                            const Icon(Icons.star, size: 20, color: Colors.amber),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${widget.property.rating ?? _localRating ?? 'No ratings'}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Reviews',
+                              style: TextStyle(
+                                color: AppTheme.primaryColor,
+                                decoration: TextDecoration.underline,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -489,24 +551,42 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                 ),
               ],
             ),
-            SizedBox(
-              width: 200,
-              child: CustomButton(
-                text: 'Apply',
-                onPressed: () {
-                  // Naviguer vers l'écran de candidature
-                  // Navigator.pushNamed(
-                  //   context,
-                  //   ApplicationScreen.routeName,
-                  //   arguments: widget.property,
-                  // );
-                },
-              ),
-            ),
+            Row(
+              children: [
+                SizedBox(
+                  width: 150,
+                  child: CustomButton(
+                    text: 'Apply',
+                    onPressed: () {
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 150,
+                  child: CustomButton(
+                    text: 'Add Review',
+                    onPressed: _addReview,
+                    isOutlined: true,
+                  ),
+                ),
+              ],
+            )
           ],
         ),
       ),
     );
+  }
+
+  Future<double?> _getLocalRating() async {
+    try {
+      final databaseService = DatabaseService();
+      final reviewData = await databaseService.getPropertyReviewsWithRating(widget.property.propertyId);
+      return reviewData['averageRating'] as double?;
+    } catch (e) {
+      print('Error getting local rating: $e');
+      return null;
+    }
   }
 
   Widget _buildFeatureItem(IconData icon, String text) {
@@ -532,8 +612,7 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
     if (amenityLower.contains('wifi')) return Icons.wifi;
     if (amenityLower.contains('kitchen')) return Icons.kitchen;
     if (amenityLower.contains('Washing machine')) return Icons.local_laundry_service;
-    if (amenityLower.contains('TV') || amenityLower.contains('tv'))
-      return Icons.tv;
+    if (amenityLower.contains('TV') || amenityLower.contains('tv')) return Icons.tv;
     if (amenityLower.contains('parking')) return Icons.local_parking;
     if (amenityLower.contains('Air conditioning')) return Icons.ac_unit;
     if (amenityLower.contains('Heating')) return Icons.whatshot;

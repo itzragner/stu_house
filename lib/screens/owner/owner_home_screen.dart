@@ -5,6 +5,8 @@ import '../../models/owner.dart';
 import '../../services/database_service.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/common/custom_button.dart';
+import '../../widgets/common/notification_badge.dart';
+import '../common/notifications_screen.dart';
 import 'add_property_screen.dart';
 import '../common/property_details_screen.dart';
 import '../../models/application.dart';
@@ -37,11 +39,15 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.home),
-            label: 'My Properties',
+            label: 'Properties',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.search),
+            label: 'Explore',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.article_outlined),
-            label: 'Requests',
+            label: 'Applications',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.message_outlined),
@@ -75,10 +81,14 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
       case 0:
         return _buildPropertiesTab();
       case 1:
-        return _buildApplicationsTab();
+        return const Center(
+          child: Text('Explore Tab'),
+        );
       case 2:
-        return _buildMessagesTab();
+        return _buildApplicationsTab();
       case 3:
+        return const NotificationsScreen(); // Changed from _buildMessagesTab()
+      case 4:
         return _buildProfileTab();
       default:
         return _buildPropertiesTab();
@@ -147,6 +157,21 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
                   centerTitle: true,
                   floating: true,
                   snap: true,
+                  actions: [
+                    NotificationBadge(
+                      onTap: () {
+                        Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => NotificationsScreen())
+                        ).then((_) => setState(() {}));
+                      },
+                      child: IconButton(
+                        icon: const Icon(Icons.notifications),
+                        onPressed: null, // We're using the NotificationBadge's onTap instead
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
                 ),
                 // Properties list
                 SliverPadding(

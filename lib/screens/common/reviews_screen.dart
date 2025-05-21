@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../../models/review.dart';
 import '../../models/property.dart';
+import '../../services/auth_service.dart';
 import '../../services/database_service.dart';
 import '../../config/themes.dart';
+import '../student/add_review_screen.dart';
 
 class ReviewsScreen extends StatefulWidget {
   static const String routeName = '/property/reviews';
@@ -37,12 +40,21 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
     });
 
     try {
-      // Charger les avis pour cette propriété
-      final reviews = await _databaseService.getReviewsByProperty(widget.property.propertyId);
+      // Get reviews with robust method
+      final reviews = await _databaseService.getReviewsByPropertyRobust(widget.property.propertyId);
 
-      // Calculer la distribution des notes
+      // Calculate average rating manually
+      double averageRating = 0.0;
+      if (reviews.isNotEmpty) {
+        double totalRating = 0.0;
+        for (var review in reviews) {
+          totalRating += review.rating;
+        }
+        averageRating = totalRating / reviews.length;
+      }
+
+      // Calculate rating distribution
       Map<int, int> distribution = {5: 0, 4: 0, 3: 0, 2: 0, 1: 0};
-
       for (var review in reviews) {
         int rating = review.rating.round();
         if (distribution.containsKey(rating)) {
@@ -53,14 +65,27 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
       setState(() {
         _reviews = reviews;
         _ratingDistribution = distribution;
-        _averageRating = widget.property.rating ?? 0.0;
+        _averageRating = averageRating;
         _isLoading = false;
       });
+
+      print('Reviews loaded: ${reviews.length}, Average rating: $averageRating');
     } catch (e) {
       print('Error loading reviews: $e');
       setState(() {
+        _reviews = [];
+        _ratingDistribution = {5: 0, 4: 0, 3: 0, 2: 0, 1: 0};
+        _averageRating = 0.0;
         _isLoading = false;
       });
+
+      // Show error message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error loading reviews: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -68,67 +93,112 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Review'),
+        title: const Text('Reviews'),
         centerTitle: true,
+        actions: [
+          // Add a refresh button
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _isLoading ? null : _loadReviews,
+            tooltip: 'Refresh reviews',
+          ),
+        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // En-tête avec note moyenne
-              Row(
-                children: [
-                  const Icon(Icons.star, color: Colors.black, size: 30),
-                  const SizedBox(width: 8),
-                  Text(
-                    _averageRating.toStringAsFixed(2),
-                    style: const TextStyle(
-                      fontSize: 30,
-                      fontWeight: FontWeight.bold,
+          : RefreshIndicator(
+        onRefresh: _loadReviews,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header with average rating
+                Row(
+                  children: [
+                    const Icon(Icons.star, color: Colors.amber, size: 30),
+                    const SizedBox(width: 8),
+                    Text(
+                      _averageRating.toStringAsFixed(2),
+                      style: const TextStyle(
+                        fontSize: 30,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
-                  Text(
-                    ' · ${_reviews.length} review',
-                    style: TextStyle(
-                      fontSize: 20,
-                      color: Colors.grey[700],
+                    Text(
+                      ' · ${_reviews.length} ${_reviews.length == 1 ? 'review' : 'reviews'}',
+                      style: TextStyle(
+                        fontSize: 20,
+                        color: Colors.grey[700],
+                      ),
                     ),
-                  ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+
+                // Rating distribution
+                if (_reviews.isNotEmpty) ...[
+                  _buildRatingBar(5),
+                  const SizedBox(height: 8),
+                  _buildRatingBar(4),
+                  const SizedBox(height: 8),
+                  _buildRatingBar(3),
+                  const SizedBox(height: 8),
+                  _buildRatingBar(2),
+                  const SizedBox(height: 8),
+                  _buildRatingBar(1),
+
+                  const SizedBox(height: 24),
+                  const Divider(),
+                  const SizedBox(height: 24),
                 ],
-              ),
-              const SizedBox(height: 24),
 
-              // Distribution des notes
-              if (_reviews.isNotEmpty) ...[
-                _buildRatingBar(5),
-                const SizedBox(height: 8),
-                _buildRatingBar(4),
-                const SizedBox(height: 8),
-                _buildRatingBar(3),
-                const SizedBox(height: 8),
-                _buildRatingBar(2),
-                const SizedBox(height: 8),
-                _buildRatingBar(1),
-
-                const SizedBox(height: 24),
-                const Divider(),
-                const SizedBox(height: 24),
-              ],
-
-              // Liste des avis
-              if (_reviews.isEmpty)
-                const Center(
-                  child: Text(
-                    'No reviews yet',
-                    style: TextStyle(fontSize: 16),
+                // Reviews list or empty state
+                _reviews.isEmpty
+                    ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.rate_review_outlined,
+                        size: 80,
+                        color: Colors.grey[400],
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'No reviews yet',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Be the first to review this property',
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                      const SizedBox(height: 24),
+                      if (Provider.of<AuthService>(context).isStudent)
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.pushNamed(
+                              context,
+                              AddReviewScreen.routeName,
+                              arguments: widget.property,
+                            ).then((_) => _loadReviews());
+                          },
+                          icon: const Icon(Icons.rate_review),
+                          label: const Text('Write a review'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.primaryColor,
+                          ),
+                        ),
+                    ],
                   ),
                 )
-              else
-                ListView.separated(
+                    : ListView.separated(
                   physics: const NeverScrollableScrollPhysics(),
                   shrinkWrap: true,
                   itemCount: _reviews.length,
@@ -138,7 +208,8 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
                     return _buildReviewItem(review);
                   },
                 ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

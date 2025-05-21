@@ -1,4 +1,5 @@
-// models/review.dart
+// Update lib/models/review.dart to ensure all fields are handled correctly
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uuid/uuid.dart';
 
@@ -28,7 +29,7 @@ class Review {
         reviewDate = reviewDate ?? DateTime.now();
 
   Map<String, dynamic> toMap() {
-    return {
+    final Map<String, dynamic> map = {
       'reviewId': reviewId,
       'propertyId': propertyId,
       'studentId': studentId,
@@ -36,23 +37,42 @@ class Review {
       'rating': rating,
       'comment': comment,
       'reviewDate': reviewDate,
-      'studentName': studentName,
-      'studentPhotoUrl': studentPhotoUrl,
     };
+
+    // Add optional fields if they exist
+    if (studentName != null) {
+      map['studentName'] = studentName;
+    }
+
+    if (studentPhotoUrl != null) {
+      map['studentPhotoUrl'] = studentPhotoUrl;
+    }
+
+    return map;
   }
 
   factory Review.fromMap(Map<String, dynamic> map) {
-    return Review(
-      reviewId: map['reviewId'],
-      propertyId: map['propertyId'] ?? '',
-      studentId: map['studentId'] ?? '',
-      ownerId: map['ownerId'] ?? '',
-      rating: (map['rating'] ?? 0).toDouble(),
-      comment: map['comment'] ?? '',
-      reviewDate: (map['reviewDate'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      studentName: map['studentName'],
-      studentPhotoUrl: map['studentPhotoUrl'],
-    );
+    try {
+      return Review(
+        reviewId: map['reviewId'] ?? '',
+        propertyId: map['propertyId'] ?? '',
+        studentId: map['studentId'] ?? '',
+        ownerId: map['ownerId'] ?? '',
+        rating: (map['rating'] is int)
+            ? (map['rating'] as int).toDouble()
+            : (map['rating'] ?? 0).toDouble(),
+        comment: map['comment'] ?? '',
+        reviewDate: (map['reviewDate'] is Timestamp)
+            ? (map['reviewDate'] as Timestamp).toDate()
+            : DateTime.now(),
+        studentName: map['studentName'],
+        studentPhotoUrl: map['studentPhotoUrl'],
+      );
+    } catch (e) {
+      print('Error parsing Review from map: $e');
+      print('Map content: $map');
+      rethrow;
+    }
   }
 
   Review copyWith({
@@ -79,7 +99,3 @@ class Review {
     );
   }
 }
-
-
-
-

@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'dart:math';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../models/notification.dart';
 import '../models/student.dart';
 import '../models/owner.dart';
 import '../models/property.dart';
@@ -21,6 +21,8 @@ class DatabaseService {
   final CollectionReference _propertiesCollection;
   final CollectionReference _applicationsCollection;
   final CollectionReference _reviewsCollection;
+  final CollectionReference _notificationsCollection = FirebaseFirestore.instance.collection('notifications');
+
 
   DatabaseService()
       : _usersCollection = FirebaseFirestore.instance.collection('users'),
@@ -31,6 +33,130 @@ class DatabaseService {
         _applicationsCollection = FirebaseFirestore.instance.collection(
             'applications'),
         _reviewsCollection = FirebaseFirestore.instance.collection('reviews');
+
+  // *** NOTIF METHODS ***
+
+  Future<String> createReviewWithNotification(Review review) async {
+    try {
+      print('Starting to create review: ${review.reviewId} for property: ${review.propertyId}');
+
+      // 1. First, save the review without using a transaction
+      await _reviewsCollection.doc(review.reviewId).set(review.toMap());
+      print('Review document created successfully');
+
+      // 2. Get property details for the notification
+      Property? property;
+      try {
+        property = await getProperty(review.propertyId);
+        print('Retrieved property: ${property.title}');
+      } catch (e) {
+        print('Error getting property: $e');
+        throw Exception('Could not find the property');
+      }
+
+      // 3. Get student details
+      String studentName = 'A student';
+      String? studentPhotoUrl;
+
+      try {
+        final studentDoc = await _usersCollection.doc(review.studentId).get();
+        if (studentDoc.exists) {
+          final userData = studentDoc.data() as Map<String, dynamic>;
+          studentName = userData['fullName'] ?? 'A student';
+          studentPhotoUrl = userData['profilePictureUrl'];
+          print('Retrieved student: $studentName');
+        }
+      } catch (e) {
+        print('Error getting student info: $e');
+        // Continue anyway, we have default values
+      }
+
+      // 4. Create notification for the owner
+      final notification = Notification(
+        userId: review.ownerId,
+        title: 'New Review',
+        message: '$studentName rated your property "${property.title}" ${review.rating} stars',
+        type: NotificationType.newReview,
+        relatedItemId: review.reviewId,
+        relatedItemType: 'review',
+        senderId: review.studentId,
+        senderName: studentName,
+        senderPhotoUrl: studentPhotoUrl,
+      );
+
+      await _notificationsCollection.doc(notification.notificationId).set(notification.toMap());
+      print('Notification created successfully');
+
+      // 5. Update property rating
+      try {
+        await updatePropertyRating(review.propertyId);
+        print('Property rating updated successfully');
+      } catch (e) {
+        print('Error updating property rating: $e');
+        // Continue anyway, the review is still created
+      }
+
+      return review.reviewId;
+    } catch (e) {
+      print('Detailed error in createReviewWithNotification: $e');
+      print('Error stack trace: ${StackTrace.current}');
+      rethrow;
+    }
+  }
+
+  Future<List<Notification>> getNotificationsForUser(String userId, {int limit = 20}) async {
+    try {
+      final querySnapshot = await _notificationsCollection
+          .where('userId', isEqualTo: userId)
+          .orderBy('createdAt', descending: true)
+          .limit(limit)
+          .get();
+
+      return querySnapshot.docs
+          .map((doc) => Notification.fromMap(doc.data() as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      print('Error getting notifications: $e');
+      return [];
+    }
+  }
+
+  Future<void> markNotificationAsRead(String notificationId) async {
+    try {
+      await _notificationsCollection
+          .doc(notificationId)
+          .update({'isRead': true});
+    } catch (e) {
+      print('Error marking notification as read: $e');
+      rethrow;
+    }
+  }
+
+  Future<int?> getUnreadNotificationsCount(String userId) async {
+    try {
+      final querySnapshot = await _notificationsCollection
+          .where('userId', isEqualTo: userId)
+          .where('isRead', isEqualTo: false)
+          .count()
+          .get();
+
+      return querySnapshot.count;
+    } catch (e) {
+      print('Error getting unread notifications count: $e');
+      return 0;
+    }
+  }
+
+  Future<void> deleteNotification(String notificationId) async {
+    try {
+      await _notificationsCollection.doc(notificationId).delete();
+    } catch (e) {
+      print('Error deleting notification: $e');
+      rethrow;
+    }
+  }
+
+
 
   // *** IMAGE UPLOAD METHODS ***
 
@@ -54,7 +180,6 @@ class DatabaseService {
     }
   }
 
-// Upload an owner image
   Future<String> uploadOwnerImage(String ownerId, File imageFile, String type) async {
     try {
       if (_useFirebaseStorage) {
@@ -83,7 +208,6 @@ class DatabaseService {
     }
   }
 
-// Upload a property image
   Future<String> uploadPropertyImage(String propertyId, File imageFile) async {
     try {
       if (_useFirebaseStorage) {
@@ -227,7 +351,6 @@ class DatabaseService {
     }
   }
 
-  // Mettre à jour les informations d'un étudiant
   Future<void> updateStudent(Student student) async {
     try {
       // Mettre à jour les informations de base
@@ -250,7 +373,6 @@ class DatabaseService {
     }
   }
 
-  // Ajouter un logement aux favoris
   Future<void> addFavoriteProperty(String studentId, String propertyId) async {
     try {
       await _studentsCollection.doc(studentId).update({
@@ -261,9 +383,8 @@ class DatabaseService {
     }
   }
 
-  // Retirer un logement des favoris
-  Future<void> removeFavoriteProperty(String studentId,
-      String propertyId) async {
+  Future<void> removeFavoriteProperty(String studentId, String propertyId) async
+  {
     try {
       await _studentsCollection.doc(studentId).update({
         'favoritePropertyIds': FieldValue.arrayRemove([propertyId]),
@@ -273,7 +394,6 @@ class DatabaseService {
     }
   }
 
-  // Récupérer les logements favoris d'un étudiant
   Future<List<Property>> getFavoriteProperties(String studentId) async {
     try {
       // Obtenir d'abord la liste des IDs de propriétés favorites
@@ -417,7 +537,6 @@ class DatabaseService {
     }
   }
 
-  // Mettre à jour les informations d'un propriétaire
   Future<void> updateOwner(Owner owner) async {
     try {
       // Mettre à jour les informations de base
@@ -441,7 +560,6 @@ class DatabaseService {
 
   // *** PROPERTY METHODS ***
 
-  // Créer une nouvelle propriété
   Future<String> createProperty(Property property) async {
     try {
       // Ajout dans Firestore avec l'ID généré
@@ -453,7 +571,6 @@ class DatabaseService {
     }
   }
 
-  // Récupérer une propriété par son ID
   Future<Property> getProperty(String propertyId) async {
     try {
       DocumentSnapshot propertyDoc = await _propertiesCollection
@@ -470,7 +587,6 @@ class DatabaseService {
     }
   }
 
-  // Mettre à jour une propriété
   Future<void> updateProperty(Property property) async {
     try {
       await _propertiesCollection.doc(property.propertyId).update(
@@ -480,7 +596,6 @@ class DatabaseService {
     }
   }
 
-  // Supprimer une propriété
   Future<void> deleteProperty(String propertyId) async {
     try {
       // Supprimer la propriété
@@ -502,7 +617,6 @@ class DatabaseService {
     }
   }
 
-  // Récupérer les propriétés d'un propriétaire
   Future<List<Property>> getPropertiesByOwner(String ownerId) async {
     try {
       QuerySnapshot querySnapshot = await _propertiesCollection
@@ -517,7 +631,6 @@ class DatabaseService {
     }
   }
 
-  // Rechercher des propriétés selon des critères
   Future<List<Property>> searchProperties({
     double? minPrice,
     double? maxPrice,
@@ -528,7 +641,8 @@ class DatabaseService {
     double? latitude,
     double? longitude,
     double? radius, // km
-  }) async {
+  }) async
+  {
     try {
       // Commencer avec une requête de base
       Query query = _propertiesCollection;
@@ -592,9 +706,9 @@ class DatabaseService {
     }
   }
 
-  // Calculer la distance entre deux points (en km) - Formule de Haversine
   double _calculateDistance(double lat1, double lon1, double lat2,
-      double lon2) {
+      double lon2)
+  {
     const double p = 0.017453292519943295; // Math.PI / 180
     const double earthRadius = 6371.0; // Rayon de la Terre en km
 
@@ -608,7 +722,6 @@ class DatabaseService {
 
   // *** APPLICATION METHODS ***
 
-  // Créer une nouvelle candidature
   Future<String> createApplication(RentalApplication application) async {
     try {
       await _applicationsCollection.doc(application.applicationId).set(
@@ -619,7 +732,6 @@ class DatabaseService {
     }
   }
 
-  // Récupérer une candidature par son ID
   Future<RentalApplication> getApplication(String applicationId) async {
     try {
       DocumentSnapshot applicationDoc = await _applicationsCollection.doc(
@@ -636,7 +748,6 @@ class DatabaseService {
     }
   }
 
-  // Mettre à jour le statut d'une candidature
   Future<void> updateApplicationStatus(String applicationId,
       ApplicationStatus status,
       String? ownerResponse) async
@@ -654,7 +765,6 @@ class DatabaseService {
     }
   }
 
-  // Récupérer les candidatures d'un étudiant
   Future<List<RentalApplication>> getApplicationsByStudent(
       String studentId) async
   {
@@ -672,7 +782,6 @@ class DatabaseService {
     }
   }
 
-  // Récupérer les candidatures pour une propriété
   Future<List<RentalApplication>> getApplicationsByProperty(
       String propertyId) async
   {
@@ -690,7 +799,6 @@ class DatabaseService {
     }
   }
 
-  // Récupérer les candidatures reçues par un propriétaire
   Future<List<RentalApplication>> getApplicationsByOwner(String ownerId) async {
     try {
       // D'abord, récupérer toutes les propriétés du propriétaire
@@ -730,18 +838,42 @@ class DatabaseService {
 
   Future<String> createReview(Review review) async {
     try {
-      await _reviewsCollection.doc(review.reviewId).set(review.toMap());
+      print('Creating review using fallback method: ${review.reviewId}');
 
-      // Mettre à jour la note moyenne du propriétaire
-      await updateOwnerRating(review.ownerId);
+      // Save the review to Firestore
+      await _reviewsCollection.doc(review.reviewId).set(review.toMap());
+      print('Review saved successfully using fallback method');
+
+      // Update the property rating
+      try {
+        await updatePropertyRating(review.propertyId);
+        print('Property rating updated from fallback method');
+      } catch (e) {
+        print('Error updating property rating from fallback method: $e');
+        // Continue anyway
+      }
 
       return review.reviewId;
     } catch (e) {
+      print('Error in fallback createReview: $e');
+      throw Exception('Failed to create review: $e');
+    }
+  }
+  Future<Review> getReview(String reviewId) async {
+    try {
+      DocumentSnapshot reviewDoc = await _reviewsCollection.doc(reviewId).get();
+
+      if (!reviewDoc.exists) {
+        throw Exception('Review not found');
+      }
+
+      return Review.fromMap(reviewDoc.data() as Map<String, dynamic>);
+    } catch (e) {
+      print('Error getting review: $e');
       rethrow;
     }
   }
 
-// Récupérer tous les avis pour une propriété
   Future<List<Review>> getReviewsByProperty(String propertyId) async {
     try {
       QuerySnapshot querySnapshot = await _reviewsCollection
@@ -757,7 +889,6 @@ class DatabaseService {
     }
   }
 
-// Récupérer tous les avis d'un étudiant
   Future<List<Review>> getReviewsByStudent(String studentId) async {
     try {
       QuerySnapshot querySnapshot = await _reviewsCollection
@@ -773,7 +904,6 @@ class DatabaseService {
     }
   }
 
-// Récupérer tous les avis pour un propriétaire
   Future<List<Review>> getReviewsByOwner(String ownerId) async {
     try {
       QuerySnapshot querySnapshot = await _reviewsCollection
@@ -789,7 +919,6 @@ class DatabaseService {
     }
   }
 
-// Mettre à jour la note moyenne d'un propriétaire
   Future<void> updateOwnerRating(String ownerId) async {
     try {
       // Récupérer tous les avis pour ce propriétaire
@@ -815,7 +944,6 @@ class DatabaseService {
     }
   }
 
-// Supprimer un avis
   Future<void> deleteReview(String reviewId, String ownerId) async {
     try {
       await _reviewsCollection.doc(reviewId).delete();
@@ -825,35 +953,204 @@ class DatabaseService {
       rethrow;
     }
   }
+
   Future<void> updatePropertyRating(String propertyId) async {
     try {
-      // Récupérer tous les avis pour cette propriété
-      List<Review> reviews = await getReviewsByProperty(propertyId);
+      print('Updating rating for property: $propertyId');
+
+      // 1. Get all reviews for this property
+      final querySnapshot = await _reviewsCollection
+          .where('propertyId', isEqualTo: propertyId)
+          .get();
+
+      final reviews = querySnapshot.docs
+          .map((doc) => Review.fromMap(doc.data() as Map<String, dynamic>))
+          .toList();
+
+      print('Found ${reviews.length} reviews for this property');
 
       if (reviews.isEmpty) {
-        // Si aucun avis, mettre à null
+        // If no reviews, update the property with a null rating
         await _propertiesCollection.doc(propertyId).update({
           'rating': null,
         });
+        print('No reviews found, rating set to null');
         return;
       }
 
-      // Calculer la note moyenne
+      // 2. Calculate the average rating
       double totalRating = 0;
-      for (Review review in reviews) {
+      for (final review in reviews) {
         totalRating += review.rating;
       }
+
       double averageRating = totalRating / reviews.length;
 
-      // Arrondir à 2 décimales
-      averageRating = double.parse(averageRating.toStringAsFixed(2));
+      // 3. Round to 1 decimal place
+      averageRating = double.parse(averageRating.toStringAsFixed(1));
 
-      // Mettre à jour la note de la propriété dans Firestore
+      print('Calculated average rating: $averageRating');
+
+      // 4. Update the property
       await _propertiesCollection.doc(propertyId).update({
         'rating': averageRating,
       });
+
+      print('Property rating updated successfully to: $averageRating');
     } catch (e) {
+      print('Error updating property rating: $e');
+      print('Error stack trace: ${StackTrace.current}');
       rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> getPropertyReviewsWithRating(String propertyId) async {
+    try {
+      // Get all reviews for this property
+      final querySnapshot = await _reviewsCollection
+          .where('propertyId', isEqualTo: propertyId)
+          .get();
+
+      final reviews = querySnapshot.docs
+          .map((doc) => Review.fromMap(doc.data() as Map<String, dynamic>))
+          .toList();
+
+      print('Found ${reviews.length} reviews for property $propertyId');
+
+      // Calculate average rating locally
+      double averageRating = 0;
+      if (reviews.isNotEmpty) {
+        double totalRating = 0;
+        for (final review in reviews) {
+          totalRating += review.rating;
+        }
+        averageRating = totalRating / reviews.length;
+        averageRating = double.parse(averageRating.toStringAsFixed(1));
+      }
+
+      return {
+        'reviews': reviews,
+        'averageRating': reviews.isEmpty ? null : averageRating,
+        'reviewCount': reviews.length
+      };
+    } catch (e) {
+      print('Error getting property reviews with rating: $e');
+      return {
+        'reviews': <Review>[],
+        'averageRating': null,
+        'reviewCount': 0
+      };
+    }
+  }
+
+  Future<String> createReviewSafe(Review review) async {
+    try {
+      print('Creating review with safe method: ${review.reviewId}');
+
+      // 1. Save the review
+      await _reviewsCollection.doc(review.reviewId).set(review.toMap());
+      print('Review saved successfully');
+
+      // 2. Try to update the property rating
+      try {
+        await updatePropertyRating(review.propertyId);
+        print('Property rating updated successfully');
+      } catch (e) {
+        print('Error updating property rating: $e');
+        print('Using local rating calculation instead');
+
+        // 3. Get the property rating locally
+        final ratingData = await getPropertyReviewsWithRating(review.propertyId);
+        double? newRating = ratingData['averageRating'];
+
+        print('Locally calculated rating: $newRating');
+
+        // 4. Create a notification with the local rating
+        try {
+          // Get property details
+          final property = await getProperty(review.propertyId);
+
+          // Get student name
+          String studentName = 'A student';
+          try {
+            final studentDoc = await _usersCollection.doc(review.studentId).get();
+            if (studentDoc.exists) {
+              studentName = (studentDoc.data() as Map<String, dynamic>)['fullName'] ?? 'A student';
+            }
+          } catch (e) {
+            print('Error getting student name: $e');
+          }
+
+          // Create notification text with locally calculated rating
+          final notificationMessage = '$studentName rated your property "${property.title}" ${review.rating} stars. ' +
+              (newRating != null ? 'New average rating: $newRating' : '');
+
+          // Try to create notification
+          final notification = Notification(
+            userId: review.ownerId,
+            title: 'New Review',
+            message: notificationMessage,
+            type: NotificationType.newReview,
+            relatedItemId: review.reviewId,
+            relatedItemType: 'review',
+            senderId: review.studentId,
+            senderName: studentName,
+            senderPhotoUrl: null,
+          );
+
+          await _notificationsCollection.doc(notification.notificationId).set(notification.toMap());
+          print('Notification created with local rating');
+        } catch (notificationError) {
+          print('Could not create notification: $notificationError');
+          // We've at least saved the review
+        }
+      }
+
+      return review.reviewId;
+    } catch (e) {
+      print('Error in createReviewSafe: $e');
+      rethrow;
+    }
+  }
+  Future<List<Review>> getReviewsByPropertyRobust(String propertyId) async {
+    try {
+      print('Getting reviews for property: $propertyId');
+
+      // Try the ordered query first (requires index)
+      try {
+        final querySnapshot = await _reviewsCollection
+            .where('propertyId', isEqualTo: propertyId)
+            .orderBy('reviewDate', descending: true)
+            .get();
+
+        final reviews = querySnapshot.docs
+            .map((doc) => Review.fromMap(doc.data() as Map<String, dynamic>))
+            .toList();
+
+        print('Found ${reviews.length} reviews with ordered query');
+        return reviews;
+      } catch (e) {
+        print('Error with ordered query: $e');
+        print('Falling back to unordered query');
+
+        // Fallback to simple query without order (doesn't require index)
+        final querySnapshot = await _reviewsCollection
+            .where('propertyId', isEqualTo: propertyId)
+            .get();
+
+        final reviews = querySnapshot.docs
+            .map((doc) => Review.fromMap(doc.data() as Map<String, dynamic>))
+            .toList();
+
+        // Sort reviews client-side by date
+        reviews.sort((a, b) => b.reviewDate.compareTo(a.reviewDate));
+
+        print('Found ${reviews.length} reviews with unordered query');
+        return reviews;
+      }
+    } catch (e) {
+      print('All review queries failed: $e');
+      return [];
     }
   }
 }
