@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
@@ -198,6 +199,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
             propertyId,
             image,
           );
+          print('Uploaded image URL: $imageUrl');
           imageUrls.add(imageUrl);
         }
 
@@ -641,11 +643,34 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                         children: [
                           ClipRRect(
                             borderRadius: BorderRadius.circular(8),
-                            child: Image.file(
+                            child: kIsWeb
+                                ? Image.network(
+                              _selectedImages[index].path,
+                              width: 150,
+                              height: 200,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Container(
+                                  width: 150,
+                                  height: 200,
+                                  color: Colors.grey[300],
+                                  child: const Icon(Icons.error, color: Colors.grey),
+                                );
+                              },
+                            )
+                                : Image.file(
                               _selectedImages[index],
                               width: 150,
                               height: 200,
                               fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Container(
+                                  width: 150,
+                                  height: 200,
+                                  color: Colors.grey[300],
+                                  child: const Icon(Icons.error, color: Colors.grey),
+                                );
+                              },
                             ),
                           ),
                           Positioned(
