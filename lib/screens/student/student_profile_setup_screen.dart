@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
@@ -164,7 +165,7 @@ class _StudentProfileSetupScreenState extends State<StudentProfileSetupScreen> {
                         CircleAvatar(
                           radius: 60,
                           backgroundColor: Colors.grey[300],
-                          backgroundImage: _profileImage != null
+                          backgroundImage: _profileImage != null && !kIsWeb
                               ? FileImage(_profileImage!)
                               : null,
                           child: _profileImage == null
@@ -172,6 +173,23 @@ class _StudentProfileSetupScreenState extends State<StudentProfileSetupScreen> {
                             Icons.person,
                             size: 60,
                             color: Colors.grey,
+                          )
+                              : kIsWeb
+                              ? ClipRRect(
+                            borderRadius: BorderRadius.circular(60),
+                            child: Image.network(
+                              _profileImage!.path,
+                              width: 120,
+                              height: 120,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return const Icon(
+                                  Icons.person,
+                                  size: 60,
+                                  color: Colors.grey,
+                                );
+                              },
+                            ),
                           )
                               : null,
                         ),

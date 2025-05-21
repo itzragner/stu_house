@@ -64,8 +64,7 @@ class AuthService extends ChangeNotifier {
           _status = AuthStatus.authenticated;
         } catch (e) {
           print('Error getting user type: $e');
-          // Don't change to unauthenticated if there's just an error getting the type
-          // The user is still authenticated with Firebase
+
           _status = AuthStatus.authenticated;
           _userType = 'unknown'; // Use a default type
         }
@@ -94,11 +93,12 @@ class AuthService extends ChangeNotifier {
     }
   }
 
-  // Sign in with email and password
   Future<bool> signInWithEmailAndPassword(String email, String password) async {
     try {
       _status = AuthStatus.loading;
       notifyListeners();
+
+      print('Attempting sign in: $email');
 
       // Attempt to sign in
       await _auth.signInWithEmailAndPassword(
@@ -118,6 +118,47 @@ class AuthService extends ChangeNotifier {
         _userId = user.uid;
         try {
           _userType = await _database.getUserType(user.uid);
+          print('User type found: $_userType');
+
+          // Validate that user records exist in Firestore
+          if (_userType == 'student') {
+            try {
+              await _database.getStudent(user.uid);
+              print('Student record confirmed in Firestore');
+            } catch (e) {
+              print('Error getting student record: $e. Creating default student record...');
+
+              // Create a default student record if it doesn't exist
+              Student student = Student(
+                uid: user.uid,
+                email: user.email ?? 'unknown',
+                fullName: user.displayName ?? 'Unknown Student',
+                phoneNumber: '',
+                favoritePropertyIds: [],
+              );
+
+              await _database.createStudent(student);
+            }
+          } else if (_userType == 'owner') {
+            try {
+              await _database.getOwner(user.uid);
+              print('Owner record confirmed in Firestore');
+            } catch (e) {
+              print('Error getting owner record: $e. Creating default owner record...');
+
+              // Create a default owner record if it doesn't exist
+              Owner owner = Owner(
+                uid: user.uid,
+                email: user.email ?? 'unknown',
+                fullName: user.displayName ?? 'Unknown Owner',
+                phoneNumber: '',
+                isVerifiedOwner: false,
+                rating: 0.0,
+              );
+
+              await _database.createOwner(owner);
+            }
+          }
         } catch (e) {
           print('Error getting user type: $e');
           _userType = 'unknown';
@@ -133,13 +174,12 @@ class AuthService extends ChangeNotifier {
       notifyListeners();
       return true;
     } catch (e) {
+      print('Error in sign in: $e');
       _status = AuthStatus.unauthenticated;
       notifyListeners();
       rethrow;
     }
   }
-
-  // Register a new user with email and password
   Future<bool> registerWithEmailAndPassword(
       String email,
       String password,
@@ -151,6 +191,8 @@ class AuthService extends ChangeNotifier {
       _status = AuthStatus.loading;
       notifyListeners();
 
+      print('Registering new ${isStudent ? 'student' : 'owner'}: $email');
+
       // Create Firebase user
       firebase_auth.UserCredential result = await _auth.createUserWithEmailAndPassword(
         email: email,
@@ -161,6 +203,8 @@ class AuthService extends ChangeNotifier {
       String uid = result.user!.uid;
       _userId = uid;
 
+      print('Firebase user created: $uid');
+
       // Create user object in Firestore
       if (isStudent) {
         Student student = Student(
@@ -168,24 +212,32 @@ class AuthService extends ChangeNotifier {
           email: email,
           fullName: fullName,
           phoneNumber: phoneNumber,
+          favoritePropertyIds: [], // Initialize with empty array
         );
+
         await _database.createStudent(student);
         _userType = 'student';
+        print('Student record created in Firestore');
       } else {
         Owner owner = Owner(
           uid: uid,
           email: email,
           fullName: fullName,
           phoneNumber: phoneNumber,
+          isVerifiedOwner: false,
+          rating: 0.0,
         );
+
         await _database.createOwner(owner);
         _userType = 'owner';
+        print('Owner record created in Firestore');
       }
 
       _status = AuthStatus.authenticated;
       notifyListeners();
       return true;
     } catch (e) {
+      print('Error in registration: $e');
       _status = AuthStatus.unauthenticated;
       notifyListeners();
       rethrow;

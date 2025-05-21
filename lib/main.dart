@@ -1,6 +1,8 @@
-// lib/main.dart
+// Update lib/main.dart
+
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:provider/provider.dart';
 import 'app.dart';
 import 'services/auth_service.dart';
@@ -9,9 +11,20 @@ import 'firebase_options.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+
+    // Initialize Firebase Storage with explicit configuration
+    FirebaseStorage.instance.setMaxUploadRetryTime(const Duration(seconds: 15));
+    FirebaseStorage.instance.setMaxOperationRetryTime(const Duration(seconds: 15));
+
+    print("Firebase initialized successfully");
+  } catch (e) {
+    print("Error initializing Firebase: $e");
+    // We'll continue running the app, but Firebase functionality might not work
+  }
 
   // Create the AuthService instance
   final authService = AuthService();

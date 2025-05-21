@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
@@ -6,6 +7,7 @@ import '../../services/auth_service.dart';
 import '../../services/database_service.dart';
 import '../../models/owner.dart';
 import '../../widgets/common/custom_button.dart';
+import '../../widgets/common/universal_image.dart';
 import 'owner_home_screen.dart';
 import '../../config/themes.dart';
 import '../student/student_home_screen.dart';
@@ -173,7 +175,7 @@ class _OwnerProfileSetupScreenState extends State<OwnerProfileSetupScreen> {
                         CircleAvatar(
                           radius: 60,
                           backgroundColor: Colors.grey[300],
-                          backgroundImage: _profileImage != null
+                          backgroundImage: _profileImage != null && !kIsWeb
                               ? FileImage(_profileImage!)
                               : null,
                           child: _profileImage == null
@@ -181,6 +183,23 @@ class _OwnerProfileSetupScreenState extends State<OwnerProfileSetupScreen> {
                             Icons.person,
                             size: 60,
                             color: Colors.grey,
+                          )
+                              : kIsWeb
+                              ? ClipRRect(
+                            borderRadius: BorderRadius.circular(60),
+                            child: Image.network(
+                              _profileImage!.path,
+                              width: 120,
+                              height: 120,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return const Icon(
+                                  Icons.person,
+                                  size: 60,
+                                  color: Colors.grey,
+                                );
+                              },
+                            ),
                           )
                               : null,
                         ),
@@ -256,10 +275,29 @@ class _OwnerProfileSetupScreenState extends State<OwnerProfileSetupScreen> {
                           height: 150,
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(8),
-                            image: DecorationImage(
-                              image: FileImage(_identityDocument!),
-                              fit: BoxFit.cover,
-                            ),
+                          ),
+                          child: UniversalImage(
+                            source: _identityDocument,
+                            width: double.infinity,
+                            height: 150,
+                            fit: BoxFit.cover,
+                            borderRadius: BorderRadius.circular(8),
+                            errorBuilder: (context, error, stackTrace) {
+                              print('Error loading identity document: $error');
+                              return Container(
+                                color: Colors.grey[300],
+                                child: const Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.error_outline, size: 40, color: Colors.grey),
+                                      SizedBox(height: 8),
+                                      Text('Failed to load document', style: TextStyle(color: Colors.grey)),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
                           ),
                         )
                       else

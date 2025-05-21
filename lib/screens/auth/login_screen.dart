@@ -63,7 +63,7 @@ class _LoginScreenState extends State<LoginScreen> {
           if (authService.isStudent) {
             Navigator.pushReplacementNamed(context, StudentHomeScreen.routeName);
           } else if (authService.isOwner) {
-            Navigator.pushReplacementNamed(context, StudentHomeScreen.routeName);
+            Navigator.pushReplacementNamed(context, OwnerHomeScreen.routeName); // Fixed navigation
           }
         }
       } catch (e) {

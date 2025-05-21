@@ -7,10 +7,13 @@ import '../models/owner.dart';
 import '../models/property.dart';
 import '../models/application.dart';
 import '../models/review.dart';
-
+import '../services/storage_service.dart';
+import 'mock_storage_service.dart';
 class DatabaseService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
-
+  final StorageService _storageService = StorageService();
+  final MockStorageService _mockStorageService = MockStorageService();
+  bool _useFirebaseStorage = true;
   // Collections
   final CollectionReference _usersCollection;
   final CollectionReference _studentsCollection;
@@ -31,39 +34,78 @@ class DatabaseService {
 
   // *** IMAGE UPLOAD METHODS ***
 
-  /// Simulated method to upload a student image
-  /// In a real app, this would use Firebase Storage
   Future<String> uploadStudentImage(String studentId, File imageFile) async {
-    // For demo purposes, we'll return a placeholder URL
-    await Future.delayed(Duration(milliseconds: 1500));  // Simulate upload time
-    return 'https://randomuser.me/api/portraits/men/${Random().nextInt(90)}.jpg';
-  }
+    try {
+      if (_useFirebaseStorage) {
+        try {
+          return await _storageService.uploadProfilePicture(studentId, imageFile);
+        } catch (e) {
+          print('Firebase storage failed, using mock storage: $e');
+          _useFirebaseStorage = false;
+        }
+      }
 
-  /// Simulated method to upload an owner image
-  /// In a real app, this would use Firebase Storage
-  Future<String> uploadOwnerImage(String ownerId, File imageFile, String type) async {
-    // For demo purposes, we'll return a placeholder URL
-    await Future.delayed(Duration(milliseconds: 1500));  // Simulate upload time
-    if (type == 'profile') {
-      return 'https://randomuser.me/api/portraits/men/${Random().nextInt(90)}.jpg';
-    } else {
-      // ID document - in a real app would be stored securely
-      return 'https://example.com/id_verification/${ownerId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      // Fallback to mock storage
+      return await _mockStorageService.uploadProfilePicture(studentId, imageFile);
+    } catch (e) {
+      print('Error uploading student image: $e');
+      // Return a placeholder in case of error
+      return 'https://via.placeholder.com/150?text=Student';
     }
   }
 
-  /// Simulated method to upload a property image
-  /// In a real app, this would use Firebase Storage
+// Upload an owner image
+  Future<String> uploadOwnerImage(String ownerId, File imageFile, String type) async {
+    try {
+      if (_useFirebaseStorage) {
+        try {
+          if (type == 'profile') {
+            return await _storageService.uploadProfilePicture(ownerId, imageFile);
+          } else {
+            return await _storageService.uploadIdentityDocument(ownerId, imageFile);
+          }
+        } catch (e) {
+          print('Firebase storage failed, using mock storage: $e');
+          _useFirebaseStorage = false;
+        }
+      }
+
+      // Fallback to mock storage
+      if (type == 'profile') {
+        return await _mockStorageService.uploadProfilePicture(ownerId, imageFile);
+      } else {
+        return await _mockStorageService.uploadIdentityDocument(ownerId, imageFile);
+      }
+    } catch (e) {
+      print('Error uploading owner image: $e');
+      // Return a placeholder in case of error
+      return 'https://via.placeholder.com/150?text=Owner';
+    }
+  }
+
+// Upload a property image
   Future<String> uploadPropertyImage(String propertyId, File imageFile) async {
-    // For demo purposes, we'll return a placeholder URL
-    await Future.delayed(Duration(milliseconds: 1500));  // Simulate upload time
-    int randomNum = Random().nextInt(1000);
-    return 'https://picsum.photos/seed/${propertyId}_$randomNum/800/600';
+    try {
+      if (_useFirebaseStorage) {
+        try {
+          return await _storageService.uploadPropertyImage(propertyId, imageFile);
+        } catch (e) {
+          print('Firebase storage failed, using mock storage: $e');
+          _useFirebaseStorage = false;
+        }
+      }
+
+      // Fallback to mock storage
+      return await _mockStorageService.uploadPropertyImage(propertyId, imageFile);
+    } catch (e) {
+      print('Error uploading property image: $e');
+      // Return a placeholder in case of error
+      return 'https://via.placeholder.com/400x300?text=Property';
+    }
   }
 
   // *** USER METHODS ***
 
-  // Obtenir le type d'utilisateur (étudiant ou propriétaire)
   Future<String> getUserType(String uid) async {
     try {
       DocumentSnapshot userDoc = await _usersCollection.doc(uid).get();
@@ -79,50 +121,100 @@ class DatabaseService {
 
   // *** STUDENT METHODS ***
 
-  // Créer un nouvel étudiant
   Future<void> createStudent(Student student) async {
     try {
-      // Sauvegarder les informations de base dans la collection users
-      await _usersCollection.doc(student.uid).set({
+      // First check if documents already exist
+      final userDoc = await _usersCollection.doc(student.uid).get();
+      final studentDoc = await _studentsCollection.doc(student.uid).get();
+
+      // Batch write to ensure both documents are created/updated atomically
+      WriteBatch batch = _db.batch();
+
+      // Prepare user data
+      Map<String, dynamic> userData = {
         'email': student.email,
         'fullName': student.fullName,
         'phoneNumber': student.phoneNumber,
         'registrationDate': student.registrationDate,
         'isVerified': student.isVerified,
         'userType': 'student',
-      });
+      };
 
-      // Sauvegarder les informations spécifiques à l'étudiant
-      await _studentsCollection.doc(student.uid).set({
-        'universityName': student.universityName,
-        'studentId': student.studentId,
-        'endOfStudies': student.endOfStudies,
+      // Add profilePictureUrl if it exists
+      if (student.profilePictureUrl != null) {
+        userData['profilePictureUrl'] = student.profilePictureUrl;
+      }
+
+      // Prepare student data
+      Map<String, dynamic> studentData = {
         'favoritePropertyIds': student.favoritePropertyIds,
-      });
+      };
+
+      // Add optional fields if they exist
+      if (student.universityName != null) {
+        studentData['universityName'] = student.universityName;
+      }
+      if (student.studentId != null) {
+        studentData['studentId'] = student.studentId;
+      }
+      if (student.endOfStudies != null) {
+        studentData['endOfStudies'] = student.endOfStudies;
+      }
+
+      // Set or update the documents
+      if (userDoc.exists) {
+        batch.update(_usersCollection.doc(student.uid), userData);
+      } else {
+        batch.set(_usersCollection.doc(student.uid), userData);
+      }
+
+      if (studentDoc.exists) {
+        batch.update(_studentsCollection.doc(student.uid), studentData);
+      } else {
+        batch.set(_studentsCollection.doc(student.uid), studentData);
+      }
+
+      // Commit the batch
+      await batch.commit();
+
+      print('Student created/updated successfully: ${student.uid}');
     } catch (e) {
+      print('Error creating/updating student: $e');
       rethrow;
     }
   }
 
-  // Récupérer un étudiant par son ID
   Future<Student> getStudent(String uid) async {
     try {
-      // Récupérer les informations de base de l'utilisateur
+      // Get basic user data
       DocumentSnapshot userDoc = await _usersCollection.doc(uid).get();
 
-      // Récupérer les informations spécifiques à l'étudiant
-      DocumentSnapshot studentDoc = await _studentsCollection.doc(uid).get();
-
-      if (!userDoc.exists || !studentDoc.exists) {
-        throw Exception('Student not found');
+      // Check if user exists
+      if (!userDoc.exists) {
+        print('User not found: $uid');
+        throw Exception('User not found');
       }
 
-      Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
-      Map<String, dynamic> studentData = studentDoc.data() as Map<
-          String,
-          dynamic>;
+      // Get student-specific data
+      DocumentSnapshot studentDoc = await _studentsCollection.doc(uid).get();
 
-      // Fusionner les deux ensembles de données
+      // Check if student exists
+      if (!studentDoc.exists) {
+        print('Student document not found. Creating default student document...');
+
+        // Create default student document if it doesn't exist
+        await _studentsCollection.doc(uid).set({
+          'favoritePropertyIds': [],
+        });
+
+        // Re-fetch the student document
+        studentDoc = await _studentsCollection.doc(uid).get();
+      }
+
+      // Combine data
+      Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
+      Map<String, dynamic> studentData = studentDoc.data() as Map<String, dynamic>;
+
       Map<String, dynamic> combinedData = {
         ...userData,
         ...studentData,
@@ -130,6 +222,7 @@ class DatabaseService {
 
       return Student.fromMap(combinedData, uid);
     } catch (e) {
+      print('Error getting student: $e');
       rethrow;
     }
   }
@@ -222,47 +315,96 @@ class DatabaseService {
 
   // *** OWNER METHODS ***
 
-  // Créer un nouveau propriétaire
   Future<void> createOwner(Owner owner) async {
     try {
-      // Sauvegarder les informations de base dans la collection users
-      await _usersCollection.doc(owner.uid).set({
+      // First check if documents already exist
+      final userDoc = await _usersCollection.doc(owner.uid).get();
+      final ownerDoc = await _ownersCollection.doc(owner.uid).get();
+
+      // Batch write to ensure both documents are created/updated atomically
+      WriteBatch batch = _db.batch();
+
+      // Prepare user data
+      Map<String, dynamic> userData = {
         'email': owner.email,
         'fullName': owner.fullName,
         'phoneNumber': owner.phoneNumber,
         'registrationDate': owner.registrationDate,
         'isVerified': owner.isVerified,
         'userType': 'owner',
-      });
+      };
 
-      // Sauvegarder les informations spécifiques au propriétaire
-      await _ownersCollection.doc(owner.uid).set({
-        'identityVerificationDoc': owner.identityVerificationDoc,
+      // Add profilePictureUrl if it exists
+      if (owner.profilePictureUrl != null) {
+        userData['profilePictureUrl'] = owner.profilePictureUrl;
+      }
+
+      // Prepare owner data
+      Map<String, dynamic> ownerData = {
         'isVerifiedOwner': owner.isVerifiedOwner,
         'rating': owner.rating,
-      });
+      };
+
+      // Add optional fields if they exist
+      if (owner.identityVerificationDoc != null) {
+        ownerData['identityVerificationDoc'] = owner.identityVerificationDoc;
+      }
+
+      // Set or update the documents
+      if (userDoc.exists) {
+        batch.update(_usersCollection.doc(owner.uid), userData);
+      } else {
+        batch.set(_usersCollection.doc(owner.uid), userData);
+      }
+
+      if (ownerDoc.exists) {
+        batch.update(_ownersCollection.doc(owner.uid), ownerData);
+      } else {
+        batch.set(_ownersCollection.doc(owner.uid), ownerData);
+      }
+
+      // Commit the batch
+      await batch.commit();
+
+      print('Owner created/updated successfully: ${owner.uid}');
     } catch (e) {
+      print('Error creating/updating owner: $e');
       rethrow;
     }
   }
 
-  // Récupérer un propriétaire par son ID
   Future<Owner> getOwner(String uid) async {
     try {
-      // Récupérer les informations de base de l'utilisateur
+      // Get basic user data
       DocumentSnapshot userDoc = await _usersCollection.doc(uid).get();
 
-      // Récupérer les informations spécifiques au propriétaire
-      DocumentSnapshot ownerDoc = await _ownersCollection.doc(uid).get();
-
-      if (!userDoc.exists || !ownerDoc.exists) {
-        throw Exception('Owner not found');
+      // Check if user exists
+      if (!userDoc.exists) {
+        print('User not found: $uid');
+        throw Exception('User not found');
       }
 
+      // Get owner-specific data
+      DocumentSnapshot ownerDoc = await _ownersCollection.doc(uid).get();
+
+      // Check if owner exists
+      if (!ownerDoc.exists) {
+        print('Owner document not found. Creating default owner document...');
+
+        // Create default owner document if it doesn't exist
+        await _ownersCollection.doc(uid).set({
+          'isVerifiedOwner': false,
+          'rating': 0.0,
+        });
+
+        // Re-fetch the owner document
+        ownerDoc = await _ownersCollection.doc(uid).get();
+      }
+
+      // Combine data
       Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
       Map<String, dynamic> ownerData = ownerDoc.data() as Map<String, dynamic>;
 
-      // Fusionner les deux ensembles de données
       Map<String, dynamic> combinedData = {
         ...userData,
         ...ownerData,
@@ -270,6 +412,7 @@ class DatabaseService {
 
       return Owner.fromMap(combinedData, uid);
     } catch (e) {
+      print('Error getting owner: $e');
       rethrow;
     }
   }
@@ -496,7 +639,8 @@ class DatabaseService {
   // Mettre à jour le statut d'une candidature
   Future<void> updateApplicationStatus(String applicationId,
       ApplicationStatus status,
-      String? ownerResponse) async {
+      String? ownerResponse) async
+  {
     try {
       await _applicationsCollection.doc(applicationId).update({
         'status': status
@@ -512,7 +656,8 @@ class DatabaseService {
 
   // Récupérer les candidatures d'un étudiant
   Future<List<RentalApplication>> getApplicationsByStudent(
-      String studentId) async {
+      String studentId) async
+  {
     try {
       QuerySnapshot querySnapshot = await _applicationsCollection
           .where('studentId', isEqualTo: studentId)
@@ -529,7 +674,8 @@ class DatabaseService {
 
   // Récupérer les candidatures pour une propriété
   Future<List<RentalApplication>> getApplicationsByProperty(
-      String propertyId) async {
+      String propertyId) async
+  {
     try {
       QuerySnapshot querySnapshot = await _applicationsCollection
           .where('propertyId', isEqualTo: propertyId)

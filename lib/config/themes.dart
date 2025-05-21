@@ -2,16 +2,16 @@ import 'package:flutter/material.dart';
 
 class AppTheme {
   // Couleurs principales
-  static const Color primaryColor = Color(0xFF00A872); // Rouge Airbnb
-  static const Color accentColor = Color(0xFF00A699);  // Vert-bleu Airbnb
-  static const Color backgroundColor = Color(0xFFBDDAD0);
-  static const Color textColor = Color(0xFF004404);
+  static const Color primaryColor = Color(0xFF00A872);
+  static const Color accentColor = Color(0xFF00A699);
+  static const Color backgroundColor = Color(0xFFFFFFFF);
+  static const Color textColor = Color(0xFF51B87F);
   static const Color secondaryTextColor = Color(0xFF767676);
-  static const Color dividerColor = Color(0xFFDDDDDD);
+  static const Color dividerColor = Color(0xFF51B87F);
 
   // Couleurs pour le thème sombre
-  static const Color darkPrimaryColor = Color(0xFFA0C7B5); // Même rouge pour constance
-  static const Color darkAccentColor = Color(0xFF00A699);  // Même accent pour constance
+  static const Color darkPrimaryColor = Color(0xFFA0C7B5);
+  static const Color darkAccentColor = Color(0xFF00A699);
   static const Color darkBackgroundColor = Color(0xFF121212);
   static const Color darkCardColor = Color(0xFF1E1E1E);
   static const Color darkTextColor = Color(0xFFE0E0E0);
@@ -50,7 +50,7 @@ class AppTheme {
       headlineSmall: TextStyle(color: textColor, fontWeight: FontWeight.bold),
       titleLarge: TextStyle(color: textColor, fontWeight: FontWeight.bold),
       bodyLarge: TextStyle(color: textColor),
-      bodyMedium: TextStyle(color: textColor),
+      bodyMedium: TextStyle(color: darkBackgroundColor),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
@@ -70,7 +70,7 @@ class AppTheme {
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
-        backgroundColor: primaryColor,
+        backgroundColor: textColor,
         foregroundColor: Colors.white,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
@@ -96,7 +96,7 @@ class AppTheme {
       selectedColor: primaryColor.withOpacity(0.1),
       secondarySelectedColor: primaryColor,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      labelStyle: TextStyle(color: textColor),
+      labelStyle: TextStyle(color: darkBackgroundColor),
       secondaryLabelStyle: TextStyle(color: Colors.white),
       brightness: Brightness.light,
     ),
