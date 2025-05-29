@@ -199,7 +199,6 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                       );
                     },
                   ),
-                  // Indicateurs de page
                   if (widget.property.imageUrls.length > 1)
                     Positioned(
                       bottom: 16,
@@ -225,7 +224,6 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                         ),
                       ),
                     ),
-                  // Bouton Favoris
                   Positioned(
                     top: 16,
                     right: 16,
@@ -285,14 +283,12 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
             ],
           ),
 
-          // Contenu
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.all(16.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Titre et note
+                children:[
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -306,7 +302,7 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                           ),
                         ),
                       ),
-                      GestureDetector(
+                      GestureDetector (
                         onTap: _navigateToReviews,
                         child: Row(
                           children: [
@@ -335,7 +331,6 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                   ),
                   const SizedBox(height: 8),
 
-                  // Adresse
                   Text(
                     widget.property.address,
                     style: TextStyle(
@@ -345,11 +340,10 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Divider
                   const Divider(),
                   const SizedBox(height: 16),
 
-                  // Informations sur le logement
+
                   Text(
                     'Accommodation offered by',
                     style: TextStyle(
